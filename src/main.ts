@@ -1,6 +1,9 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router';
+import { App as CapacitorApp } from '@capacitor/app'
+import { Capacitor } from '@capacitor/core'
+import { supabase } from '@/lib/supabase'
 
 import { IonicVue } from '@ionic/vue';
 
@@ -38,6 +41,48 @@ const app = createApp(App)
   .use(IonicVue)
   .use(router);
 
-router.isReady().then(() => {
+const handledAppUrls = new Set<string>()
+
+async function handleAppUrl(url: string) {
+  if (handledAppUrls.has(url)) return
+  handledAppUrls.add(url)
+
+  try {
+    const callbackUrl = new URL(url)
+    const code = callbackUrl.searchParams.get('code')
+    let authError: string | undefined
+
+    if (code && supabase) {
+      const { error } = await supabase.auth.exchangeCodeForSession(code)
+      if (error) authError = error.message
+    } else if (code) {
+      authError = 'Configure as credenciais do Supabase antes de concluir a autenticação.'
+    } else if (callbackUrl.searchParams.has('error_description')) {
+      authError = callbackUrl.searchParams.get('error_description') ?? undefined
+    }
+
+    await router.replace({
+      path: '/home',
+      query: {
+        ...(callbackUrl.searchParams.get('updatePassword') === '1' ? { updatePassword: '1' } : {}),
+        ...(authError ? { authError } : {}),
+      },
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Falha ao processar o retorno de autenticação.'
+    console.error(message)
+    await router.replace({ path: '/home', query: { authError: message } })
+  }
+}
+
+if (Capacitor.isNativePlatform()) {
+  void CapacitorApp.addListener('appUrlOpen', ({ url }) => handleAppUrl(url))
+}
+
+router.isReady().then(async () => {
+  if (Capacitor.isNativePlatform()) {
+    const launchUrl = await CapacitorApp.getLaunchUrl()
+    if (launchUrl?.url) await handleAppUrl(launchUrl.url)
+  }
   app.mount('#app');
 });

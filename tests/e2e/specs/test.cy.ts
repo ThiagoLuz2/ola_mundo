@@ -1,6 +1,7 @@
-describe('My First Test', () => {
-  it('Visits the app root url', () => {
+describe('Authentication screen', () => {
+  it('shows login and recovery options', () => {
     cy.visit('/')
-    cy.contains('#container', 'Ready to create an app?')
+    cy.contains('h1', 'Bem-vindo de volta')
+    cy.contains('button', 'Esqueci minha senha')
   })
 })
